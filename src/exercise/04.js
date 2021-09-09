@@ -7,12 +7,12 @@ function MessagesDisplay({messages}) {
   const containerRef = React.useRef()
   // 🐨 replace useEffect with useLayoutEffect
   React.useEffect(() => {
-    containerRef.current.scrollTop = containerRef.current.scrollHeight
+    containerRef.current.scrollTop = 0
   })
 
   return (
     <div ref={containerRef} role="log">
-      {messages.map((message, index, array) => (
+      {messages.reverse().map((message, index, array) => (
         <div key={message.id}>
           <strong>{message.author}</strong>: <span>{message.content}</span>
           {array.length - 1 === index ? null : <hr />}
@@ -31,9 +31,9 @@ function sleep(time = 0) {
 function SlooooowSibling() {
   // try this with useLayoutEffect as well to see
   // how it impacts interactivity of the page before updates.
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     // increase this number to see a more stark difference
-    sleep(300)
+    sleep(400)
   })
   return null
 }
@@ -42,11 +42,11 @@ function App() {
   const [messages, setMessages] = React.useState(allMessages.slice(0, 8))
   const addMessage = () =>
     messages.length < allMessages.length
-      ? setMessages(allMessages.slice(0, messages.length + 1))
+      ? setMessages(allMessages.slice(0, messages.length + 3))
       : null
   const removeMessage = () =>
     messages.length > 0
-      ? setMessages(allMessages.slice(0, messages.length - 1))
+      ? setMessages(allMessages.slice(0, messages.length - 3))
       : null
 
   return (
