@@ -1,7 +1,14 @@
 // useCallback: custom hooks
 // http://localhost:3000/isolated/exercise/02.js
 
-import * as React from 'react'
+import {
+  useCallback,
+  useEffect,
+  useReducer,
+  useState,
+  useRef,
+  useLayoutEffect,
+} from 'react'
 import {
   fetchPokemon,
   PokemonForm,
@@ -10,20 +17,36 @@ import {
   PokemonErrorBoundary,
 } from '../pokemon'
 
-// 🐨 this is going to be our generic asyncReducer
-function pokemonInfoReducer(state, action) {
+function useSafeDispatch(dispatch) {
+  const isMount = useRef(false)
+
+  useLayoutEffect(() => {
+    isMount.current = true
+    return () => {
+      isMount.current = false
+    }
+  }, [])
+
+  return useCallback(
+    (...args) => {
+      if (isMount.current) {
+        return dispatch(...args)
+      }
+    },
+    [dispatch],
+  ) // 儘管知道useReducer的dispatch是memoized function，但經過一層function呼叫，eslint就會判定為需要相依
+}
+
+function asyncReducer(state, action) {
   switch (action.type) {
     case 'pending': {
-      // 🐨 replace "pokemon" with "data"
-      return {status: 'pending', pokemon: null, error: null}
+      return {status: 'pending', data: null, error: null}
     }
     case 'resolved': {
-      // 🐨 replace "pokemon" with "data" (in the action too!)
-      return {status: 'resolved', pokemon: action.pokemon, error: null}
+      return {status: 'resolved', data: action.data, error: null}
     }
     case 'rejected': {
-      // 🐨 replace "pokemon" with "data"
-      return {status: 'rejected', pokemon: null, error: action.error}
+      return {status: 'rejected', data: null, error: action.error}
     }
     default: {
       throw new Error(`Unhandled action type: ${action.type}`)
@@ -31,55 +54,61 @@ function pokemonInfoReducer(state, action) {
   }
 }
 
-function PokemonInfo({pokemonName}) {
-  // 🐨 move both the useReducer and useEffect hooks to a custom hook called useAsync
-  // here's how you use it:
-  // const state = useAsync(
-  //   () => {
-  //     if (!pokemonName) {
-  //       return
-  //     }
-  //     return fetchPokemon(pokemonName)
-  //   },
-  //   {status: pokemonName ? 'pending' : 'idle'},
-  //   [pokemonName],
-  // )
-  // 🐨 so your job is to create a useAsync function that makes this work.
-  const [state, dispatch] = React.useReducer(pokemonInfoReducer, {
-    status: pokemonName ? 'pending' : 'idle',
-    // 🐨 this will need to be "data" instead of "pokemon"
-    pokemon: null,
+function useAsync(initialState) {
+  const [state, unsfaeDispatch] = useReducer(asyncReducer, {
+    status: 'idle',
+    data: null,
     error: null,
+    ...initialState,
   })
 
-  React.useEffect(() => {
-    // 💰 this first early-exit bit is a little tricky, so let me give you a hint:
-    // const promise = asyncCallback()
-    // if (!promise) {
-    //   return
-    // }
-    // then you can dispatch and handle the promise etc...
+  const isMount = useRef(false)
+
+  useEffect(() => {
+    isMount.current = true
+    return () => {
+      isMount.current = false
+    }
+  }, [])
+
+  const dispatch = useSafeDispatch(unsfaeDispatch)
+  // 使用過多useCallback包裝，會造成一些原本是靜態function(dispatch, setState)因重新定義需要hook相依處理
+
+  const run = useCallback(
+    promise => {
+      if (!promise) {
+        return
+      }
+      dispatch({type: 'pending'})
+      promise.then(
+        data => {
+          dispatch({type: 'resolved', data})
+        },
+        error => {
+          dispatch({type: 'rejected', error})
+        },
+      )
+    },
+    [dispatch],
+  ) // 不管fetch api的過程做了什麼事情，只專注接收fetch的promise result進行結果處理
+
+  return {...state, run}
+}
+
+function PokemonInfo({pokemonName}) {
+  const state = useAsync({
+    status: pokemonName ? 'pending' : 'idle',
+  })
+  const {data: pokemon, status, error, run} = state
+
+  useEffect(() => {
     if (!pokemonName) {
       return
     }
-    dispatch({type: 'pending'})
-    fetchPokemon(pokemonName).then(
-      pokemon => {
-        dispatch({type: 'resolved', pokemon})
-      },
-      error => {
-        dispatch({type: 'rejected', error})
-      },
-    )
-    // 🐨 you'll accept dependencies as an array and pass that here.
-    // 🐨 because of limitations with ESLint, you'll need to ignore
-    // the react-hooks/exhaustive-deps rule. We'll fix this in an extra credit.
-  }, [pokemonName])
+    run(fetchPokemon(pokemonName))
+  }, [pokemonName, run])
 
-  // 🐨 this will change from "pokemon" to "data"
-  const {pokemon, status, error} = state
-
-  if (status === 'idle' || !pokemonName) {
+  if (status === 'idle') {
     return 'Submit a pokemon'
   } else if (status === 'pending') {
     return <PokemonInfoFallback name={pokemonName} />
@@ -93,7 +122,7 @@ function PokemonInfo({pokemonName}) {
 }
 
 function App() {
-  const [pokemonName, setPokemonName] = React.useState('')
+  const [pokemonName, setPokemonName] = useState('')
 
   function handleSubmit(newPokemonName) {
     setPokemonName(newPokemonName)
@@ -117,7 +146,7 @@ function App() {
 }
 
 function AppWithUnmountCheckbox() {
-  const [mountApp, setMountApp] = React.useState(true)
+  const [mountApp, setMountApp] = useState(true)
   return (
     <div>
       <label>
