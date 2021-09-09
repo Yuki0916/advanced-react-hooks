@@ -13,7 +13,7 @@ function useCount() {
   return context
 } // 將useContext抽出，並且添加錯誤處理。將undefined白畫面問題有更細節的描述，並且可以與CountProvider封裝成模組
 
-function CountProvider({...props}) {
+function CountProvider(props) {
   const [count, setCount] = useState(0)
   return <CountContext.Provider value={[count, setCount]} {...props} />
 } // Kent C Dodds的建議 這樣就可以將資料狀態建立這個元件之中
